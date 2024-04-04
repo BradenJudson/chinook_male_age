@@ -4,3 +4,9 @@
 .httr-oauth
 .DS_Store
 .quarto
+*.tiff
+*.png
+*.xlsx
+*.vcf
+*.vcf.gz
+*.Rproj
