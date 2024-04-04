@@ -18,3 +18,4 @@ ggplot(data = tab, aes(x = pop, y = age)) +
              breaks = c(1, 25, 50, 75, 100)) +
   labs(x = NULL, y = "Age") + theme_bw() +
   theme(legend.title = element_blank())
+
