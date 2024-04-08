@@ -1,0 +1,9 @@
+gadm/
+*.png
+*.tiff
+*.tif
+plots/
+DBM_BC_7H_MIL_DRAINAGE_POLY/
+FWA_LAKES_POLY/
+BC_WATER_LINES_500M/
+gadm/
