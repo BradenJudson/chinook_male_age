@@ -35,15 +35,23 @@ lakes <- st_transform(st_read(dsn = "FWA_LAKES_POLY"), crs = 4326) %>%
         panel.grid = element_blank()) +
   labs(x = NULL, y = NULL) +
   geom_sf(data = fraser, colour = "skyblue", linewidth = 1/2) +
-  geom_sf(data =  punt, colour = "skyblue", linewidth = 1/4) +
-  geom_sf(data =  qual, colour = "skyblue", linewidth = 1/4) +
-  geom_sf(data =  chil, colour = "skyblue", linewidth = 1/4) +
-  geom_sf(data = lakes, color = "skyblue", fill = "navyblue") +
+  geom_sf(data =  punt, colour  = "skyblue", linewidth = 1/4) +
+  geom_sf(data =  qual, colour  = "skyblue", linewidth = 1/4) +
+  geom_sf(data =  chil, colour  = "skyblue", linewidth = 1/4) +
+  geom_sf(data = lakes, colour  = "skyblue", fill = "skyblue2") +
   geom_point(data = sites, aes(x = Lon, y = Lat), size = 1) +
   geom_label_repel(data = sites, aes(x = Lon, y = Lat, label = Site),
                    size = 2, min.segment.length = 0,
                    box.padding = 0, nudge_y = 0.1,
                    point.padding = 1/10, segment.size = 0.2) +
+  ggspatial::annotation_scale(location = "tr",
+                              width_hint = 1/10,
+                              pad_x = unit(0.30, "cm"),
+                              pad_y = unit(2.80, "cm")) +
+    geom_segment(aes(x = -122.4, xend = -122.4,
+                     y = 49.60, yend = 50),
+                 arrow = arrow(length = unit(1/5, "cm"))) +
+    annotate("text", label = "N", x = -122.4, y = 49.55) +
   coord_sf(xlim = c(-121.5, -125.4), ylim = c(49, 50)))
 
 ggsave("plots/map.tiff", dpi = 300, height = 6, width = 6)
@@ -72,6 +80,9 @@ us <- map_data("world", "USA")
 Columbia", y = 55, x = -123.8, size = 3/2) +
     annotate(geom = "text", label = "Pacific 
 Ocean", y = 50, x = -140, size = 3/2) +
+    geom_segment(aes(x = -135, xend = -126,
+                     y = 46, yend = 48.8),
+                 arrow = arrow(length = unit(1/5, "cm"))) +
     # Important to maintain accurate proportions/orientations. 
     # Plot is cartesian otherwise and appears distorted.
     coord_map(ylim = c(60, 45),
