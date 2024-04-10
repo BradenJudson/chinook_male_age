@@ -3,6 +3,7 @@ setwd("~/chinook_male_age/map")
 library(ggplot2); library(tidyverse); library(sf)
 library(bcmaps); library(ggspatial); library(sp) 
 library(ggrepel); library(cowplot); library(geodata)
+library(ggsci)
 
 bch <- st_transform(bcmaps::bc_bound_hres(), crs = 4326)
 sites <- read.csv("../data/hatchery_locations.csv")
@@ -46,15 +47,17 @@ lakes <- st_transform(st_read(dsn = "FWA_LAKES_POLY"), crs = 4326) %>%
                    point.padding = 1/10, segment.size = 0.2) +
   ggspatial::annotation_scale(location = "tr",
                               width_hint = 1/10,
-                              pad_x = unit(0.30, "cm"),
-                              pad_y = unit(2.80, "cm")) +
+                              pad_x = unit(0.32, "cm"),
+                              pad_y = unit(3.20, "cm")) +
     geom_segment(aes(x = -122.4, xend = -122.4,
                      y = 49.60, yend = 50),
                  arrow = arrow(length = unit(1/5, "cm"))) +
     annotate("text", label = "N", x = -122.4, y = 49.55) +
+    annotate("text", label = "Straight of Georgia", 
+             x = -123.7, y = 49.3, size = 3) +
   coord_sf(xlim = c(-121.5, -125.4), ylim = c(49, 50)))
 
-ggsave("plots/map.tiff", dpi = 300, height = 6, width = 6)
+# ggsave("plots/map.tiff", dpi = 300, height = 6, width = 6)
 
 # Inset ------------------------------------------------------------------------
 
@@ -91,14 +94,55 @@ Ocean", y = 50, x = -140, size = 3/2) +
 
 # Add inset --------------------------------------------------------------------
 
-ggdraw(plot = b) +
+(mapwinset <- ggdraw(plot = b) +
   draw_plot({
     ins
   },
   x = 0.77,
-  y = 0.35,
+  y = 0.50,
   width = 0.2,
-  height = 0.5)
+  height = 0.5))
 
-ggsave("plots/map_winset.tiff", dpi = 300, 
-       width = 6, height = 6)
+# ggsave("plots/map_winset.tiff", dpi = 300, 
+#        width = 6, height = 6)
+# 
+
+
+# Sample info ------------------------------------------------------------------
+
+dat <- read.csv("../data/chRADseq_samples.csv") %>% 
+  select(c("fishID", "pop", "year", "age")) %>% 
+  mutate(pop = as.factor(str_to_title(gsub("_", " ", pop)))) 
+
+tab <- dat %>% 
+  group_by(pop, age, year) %>% 
+  tally() %>% 
+  mutate(year = factor(year,
+         levels = c("2016", "2017", "2018", "2019", "2020", "2021")))
+
+(samples <- ggplot(data = tab %>% 
+         mutate(year = as.factor(year))) +
+  geom_bar(aes(x = age, y = n, fill = year), 
+           color = "black", stat = "identity",
+           linewidth = 1/5) +
+  scale_fill_npg(palette = c("nrc")) +
+  facet_grid(~ pop, scales = "free_x", space = "free_x", switch = "x") +
+  theme_bw() + labs(x = NULL, y = "Samples") +
+  theme(strip.placement = "outside", 
+        strip.text = element_text(size = 12, vjust = 2.5),
+        strip.background = element_rect(fill = NA, color = NA),
+        legend.position = "right", legend.title = element_blank(),
+        legend.margin = unit(-2, "cm")) +
+  guides(fill = guide_legend(ncol = 1, byrow = T)))
+
+ggdraw(cowplot::plot_grid(mapwinset, samples, ncol = 1, 
+                align = "VH", rel_heights = c(1, 0.75))) +
+  draw_label("Sea age:", x = 0.025, y = 0.095, size = 8, hjust = 0)
+
+ggsave("../plots/map_wsamples.tiff", dpi = 300, 
+       width = 7, height = 5)
+
+
+
+
+

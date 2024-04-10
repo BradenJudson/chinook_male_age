@@ -10,3 +10,7 @@
 *.vcf
 *.vcf.gz
 *.Rproj
+**.doc
+**.docx
+**.pdf
+**.html

@@ -8,7 +8,7 @@ dat <- read.csv("../data/chRADseq_samples.csv") %>%
   mutate(pop = as.factor(str_to_title(gsub("_", " ", pop)))) 
 
 tab <- dat %>% 
-  group_by(pop, age) %>% 
+  group_by(pop, age, year) %>% 
   tally()
 
 # Summarise sample distributions and write.
