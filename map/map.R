@@ -162,7 +162,9 @@ tab <- dat %>%
 
 # Join map and sample info figures together.
 ggdraw(cowplot::plot_grid(mapwinset, samples, ncol = 1, 
-                align = "VH", rel_heights = c(1, 0.75))) +
+                align = "VH", rel_heights = c(1, 0.75),
+                labels = c('a)', 'b)'),
+                label_size = 10, label_y = 1.02)) +
   draw_label("Sea age:", x = 0.025, y = 0.095, size = 8, hjust = 0)
 
 ggsave("../plots/map_wsamples.tiff", dpi = 300, 
