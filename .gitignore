@@ -14,4 +14,10 @@
 **.docx
 **.pdf
 **.html
+**.gds
+data/popGWAS.csv
+data/global_gwas_data_jacksbinom.csv
+data/global_gwas_data.csv
 to_do.txt
+troubleshooting/
+genotyping/HDplot/
