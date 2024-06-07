@@ -43,10 +43,9 @@ g <- snpgdsOpen("../data/snps_maf001_sub.gds", allow.duplicate = T)
 
 # Conduct KING analysis using file generated above. 
 # Must specify autosomes.only = F otherwise all SNPs are discarded.
-    # All SNPs already have known positions on nuclear autosomes. 
+# All SNPs already have known positions on nuclear autosomes. 
 king <- snpgdsIBDKING(gdsobj = g, autosome.only = F,
                       sample.id = indNames(radgl))
-
 
 # Conduct a PCA on the kinship matrix and add population-level information.
 kpcadf <- as.data.frame(dudi.pca(king$kinship, nf = 2, scannf = F, 
@@ -166,7 +165,7 @@ pcair <- read.csv("../data/pcair1.csv")
 
 # Write a function for conducting a global, multi-population GWAS that allows 
 # easy changing of response variables and distributions.
-global_gwas <- function(phenotype, distribution) {
+global_gwas <- function(phenotype, distribution, vcf, gds) {
   
   # Make GDS file readable/accessible.
   gdsfmt::showfile.gds(closeall = T)
@@ -178,8 +177,10 @@ global_gwas <- function(phenotype, distribution) {
                           family = distribution, 
                           cov.mat = as.matrix(pcrelMat))
   
+  snpgdsVCF2GDS(vcf.fn = vcf, out.fn = gds)
+  
   # Specify genotypic data.
-  geno <- GenotypeData(GdsGenotypeReader(file = "../data/snps_maf001_sub.gds"))
+  geno <- GenotypeData(GdsGenotypeReader(file = gds))
   
   # snpBlock = 100 from McKinney 2021: 10.1111/mec.15712
   genoIterator <- GenotypeBlockIterator(geno, snpBlock = 100)
@@ -187,31 +188,40 @@ global_gwas <- function(phenotype, distribution) {
   # Run the actual GWAS model in serial.
   age_assoc <- assocTestSingle(genoIterator, null.model = ageNull, test = "Score", 
                                BPPARAM = BiocParallel::SerialParam())
-  age_assoc$chr <- as.vector(radgl@chromosome) # Return chromosome information that is lost in the GDS conversion.
+  
+  age_assoc$chr <-as.vector(read.vcfR(vcf)@fix[,"CHROM"]) # Add chromosome info from VCF.
   age_assoc$fdrp <- p.adjust(age_assoc$Score.pval, method = "fdr") # Compute corrected p-values.
   age_assoc$phenotype <- phenotype # Make a uniform column specifying target phenotype.
   return(age_assoc) # And save the corresponding dataframe to the environment.
   
 }
 
-jack_gwas_global <- global_gwas(phenotype = "jack", distribution = "binomial")
-age_gwas_global  <- global_gwas(phenotype = "age", distribution = "gaussian")
+jack_gwas_global <- global_gwas(phenotype = "jack", distribution = "binomial",
+                                vcf = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.vcf",
+                                gds = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.gds")
+
+age_gwas_global  <- global_gwas(phenotype = "age", distribution = "gaussian",
+                                vcf = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.vcf",
+                                gds = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.gds")
+
+# write.csv(age_gwas_global,"../data/age_gwas_global.csv", row.names = F)
 
 # Plotting function for GWAS Manhattan plots.
 singlepop_manhattan <- function(df) {
   
   sigval <- 0.05/nrow(df)
   
-  ggplot(data = df, aes(x = variant.id, y = -log(Score.pval))) +
+  ggplot(data = df, aes(x = variant.id, y = -log(Score.pval, base = 10))) +
   geom_point(aes(colour = chr)) + theme_bw() +
   scale_color_manual(values = c(rep(c("gray20", "gray70"), 17))) +
-  geom_point(data = age_assoc[age_assoc$outlier == "Outlier",],
+  geom_point(data = df[df$outlier == "Outlier",],
              aes(x = variant.id, y = -log(Score.pval)),
              colour = "red") +
   theme(legend.title = element_blank(),
         legend.position = "none") +
   labs(x = NULL) +
-  geom_hline(yintercept = -log(sigval)) }
+  geom_hline(yintercept = -log(sigval, base = 10)) 
+  }
 
 (jack_manh <- singlepop_manhattan(df = age_gwas_global))
 ggsave("../plots/global_manhattan_jacksbinom.tiff", dpi = 300, width  = 10, height = 5)
@@ -234,9 +244,8 @@ ind_info <- read.csv("../data/chRADseq_samples.csv") %>%
                           age >  2 ~ 0)) %>% 
   filter(fishID %in% subsamples)
 
-gwaslist <- list(); gdsfmt::showfile.gds(closeall = T)
 
-local_gwas <- function(phenotype, distribution) {
+local_gwas <- function(phenotype, distribution, datafolder) {
   
   gwaslist <- list(); gdsfmt::showfile.gds(closeall = T)
   
@@ -249,21 +258,24 @@ local_gwas <- function(phenotype, distribution) {
   local.relMat <- as.matrix(pcrelMat[rownames(pcrelMat) %in% indvs,
                                      colnames(pcrelMat) %in% indvs])
   
+  # Because the thinned VCFs have a different suffix, we account for that here.
+  # Only works if thinned/pruned files are in a folder with the string "thinned" in the name.
+  suffix <- ifelse(grepl(pattern = "thinned", datafolder), "_LDprune", "")
+  
   # Technically only need to run this part once to obtain the population-level gds files. 
   # Global VCF was split into population-level VCFs and all monomorphic loci were removed.
-  snpgdsVCF2GDS(vcf.fn = paste0("../data/pop_vcfs/", pop, ".vcf"),
-                out.fn = paste0("../data/pop_vcfs/", pop, ".gds"))
+  snpgdsVCF2GDS(vcf.fn = paste0(datafolder, pop, suffix, ".vcf"),
+                out.fn = paste0(datafolder, pop, suffix, ".gds"))
   
   # For some reason the above conversion loses chromosomal information.
   # Not efficient, but I just pull out those data from the original vcf files and add them later.
-  popchrs <- as.vector(read.vcfR(paste0("../data/pop_vcfs/", pop, ".vcf"))@fix[,"CHROM"])
+  popchrs <- as.vector(read.vcfR(paste0(datafolder, pop, suffix, ".vcf"))@fix[,"CHROM"])
   
   # Read in correctly formatted genotypic data for each population.
-  popgeno <- GenotypeData(GdsGenotypeReader(paste0("../data/pop_vcfs/", pop, ".gds")))
+  popgeno <- GenotypeData(GdsGenotypeReader(paste0(datafolder, pop, suffix, ".gds")))
   
   # Create an annotated dataframe with all relevant individual information.
-  ind_data <- ScanAnnotationDataFrame(
-    data = ind_info[ind_info$fishID %in% indvs, ] %>% 
+  ind_data <- ScanAnnotationDataFrame(data = ind_info[ind_info$fishID %in% indvs, ] %>% 
       rename("scanID" = fishID))
   
   # Specify null model.
@@ -291,34 +303,54 @@ local_gwas <- function(phenotype, distribution) {
   # Assign GWAS outputs to named list.
   gwaslist[[length(gwaslist)+1]] <- agemod
   
+  }
+
+  # Name list elements and convert to long-form dataframe.
+  names(gwaslist) <- c(unique(info$pop))
+  popGWAS <- map_df(gwaslist, ~as.data.frame(.x), .id = "pop") 
+  return(popGWAS)
+
 }
 
-# Name list elements and convert to long-form dataframe.
-names(gwaslist) <- c(unique(info$pop))
-popGWAS <- map_df(gwaslist, ~as.data.frame(.x), .id = "pop") 
-return(popGWAS)
-}
+jack_gwas_local_thin <- local_gwas(phenotype = "jack", distribution = "binomial",
+                                   datafolder = "../data/pop_vcfs/thinned_m20_w1000/")
 
-jack_gwas_local <- local_gwas(phenotype = "jack", distribution = "binomial")
-age_gwas_local  <- local_gwas(phenotype = "age",  distribution = "gaussian")
+jack_gwas_local_full <- local_gwas(phenotype = "jack", distribution = "binomial",
+                                   datafolder = "../data/pop_vcfs/no_thinning/")
+
+age_gwas_local_thin  <- local_gwas(phenotype = "age",  distribution = "gaussian",
+                                   datafolder = "../data/pop_vcfs/thinned_m20_w1000/")
+
+age_gwas_local_full  <- local_gwas(phenotype = "age",  distribution = "gaussian",
+                                   datafolder = "../data/pop_vcfs/no_thinning/")
+
 
 multi_manhattan <- function(df) {
-  sigval <- 0.05/nrow(df)
+  
   ggplot(data = df, 
          aes(x = variant.id, 
-             y = -log(Score.pval))) +
+             y = -log(Score.pval, base = 10))) +
     geom_point(aes(colour = chr)) + theme_bw() +
     scale_color_manual(values = c(rep(c("gray20", "gray70"), 17))) +
     theme(legend.title = element_blank(),
           legend.position = "none") +
     labs(x = NULL) +
     facet_wrap(~pop, ncol = 1) +
-    geom_hline(yintercept = -log(sigval)) 
+    geom_hline(yintercept = -log(df$sigval, base = 10)) 
 }
 
-multi_manhattan(jack_gwas_local)
-ggsave("../plots/jack_gwas_local_manhattan.tiff", dpi = 300, width = 12, height = 8)
+multi_manhattan(jack_gwas_local_full)
+ggsave("../plots/jack_gwas_local_manhattan_full.tiff", dpi = 300, width = 12, height = 8)
 
-multi_manhattan(age_gwas_local)
-ggsave("../plots/age_gwas_local_manhattan.tiff", dpi = 300, width = 12, height = 8)
+multi_manhattan(jack_gwas_local_thin)
+ggsave("../plots/jack_gwas_local_manhattan_thin.tiff", dpi = 300, width = 12, height = 8)
+
+multi_manhattan(age_gwas_local_full)
+ggsave("../plots/age_gwas_local_manhattan_full.tiff", dpi = 300, width = 12, height = 8)
+
+multi_manhattan(age_gwas_local_thin)
+ggsave("../plots/age_gwas_local_manhattan_thin.tiff", dpi = 300, width = 12, height = 8)
+
+
+
 
