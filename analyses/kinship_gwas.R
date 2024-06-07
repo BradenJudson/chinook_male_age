@@ -28,10 +28,19 @@ subsamples <- as.factor(c(radgl@ind.names))
 # write.table(x = info[,c("Population", "Sample")], "../data/sample_pops_n707.txt",
 #             row.names = FALSE, col.names = FALSE, quote = FALSE)
 
-# ------------------------------------------------------------------------------
+# Resources used here ----------------------------------------------------------
 
 # https://uw-gac.github.io/SISG_2019/pc-relate.html
 # https://bioconductor.org/packages/devel/bioc/vignettes/GENESIS/inst/doc/assoc_test.html
+
+
+# To-do ------------------------------------------------------------------------
+
+
+# Clean up plots, add Otsh style chromosome names on x-axis. 
+# Make x-axis consistent w/ wrapped plot panels - need to do position PER chromosome, not total (???).
+# Set up script to conduct pairwise GWAS analyses.
+
 
 # Kinship ----------------------------------------------------------------------
 
@@ -146,7 +155,6 @@ write.csv(as.matrix(pcrelMat), "../data/pcrel_mat.csv", row.names = T)
 
 # GWAS I: Global ---------------------------------------------------------------
 
-gdsfmt::showfile.gds(closeall = T)
 
 # Read in and reformat individual IDs, locations and phenotypes.
 info <- read.csv("../data/chRADseq_samples.csv") %>%
@@ -223,15 +231,15 @@ singlepop_manhattan <- function(df) {
   geom_hline(yintercept = -log(sigval, base = 10)) 
   }
 
-(jack_manh <- singlepop_manhattan(df = age_gwas_global))
+(jack_manh <- singlepop_manhattan(df = jack_gwas_global))
 ggsave("../plots/global_manhattan_jacksbinom.tiff", dpi = 300, width  = 10, height = 5)
 
 
-(age_manh <- singlepop_manhattan(df = jack_gwas_global))
+(age_manh <- singlepop_manhattan(df = age_gwas_global))
 ggsave("../plots/global_manhattan_agegauss.tiff", dpi = 300, width  = 10, height = 5)
 
 
-# GWAS II: Local ----- ---------------------------------------------------------
+# GWAS II: Local ---------------------------------------------------------------
 
 # Read in GRM if starting fresh from this point.
 pcrelMat <- read.csv("../data/pcrel_mat.csv", row.names = 1) %>% 
