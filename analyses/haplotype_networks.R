@@ -32,9 +32,7 @@ cowplot::plot_grid(plotlist = LDplots, ncol = 2)
 ggsave("../plots/ots17_18_30LD.jpg", dpi = 300, width = 12, height = 12)
 
 
-
 # Network analysis -------------------------------------------------------------
-
 
 
 # Read in SNP map from plink (anchor SNP IDs to places in the genome).
@@ -66,7 +64,7 @@ hist(mem17$Group, main = NULL, xlab = "Group", breaks = nrow(mem17))
 
 
 ################################################################################
-##### MCKINNEY chooses top 2 groups, with n > 4. Why? CHECK THIS ###############
+##### MCKINNEY chooses top 2 groups with n > 4. Why? CHECK THIS ################
 ################################################################################
 
 

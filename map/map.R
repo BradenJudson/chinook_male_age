@@ -5,6 +5,13 @@ library(bcmaps); library(ggspatial); library(sp)
 library(ggrepel); library(cowplot); library(geodata)
 library(ggsci)
 
+################################################################################
+# To do:
+# Change x-axis from Qualicum River to Big Qualicum River
+# Choose a more accessible colour palette 
+################################################################################
+
+
 # High-resolution outline of BC. Convert to common coordinates.
 bch <- st_transform(bcmaps::bc_bound_hres(), crs = 4326)
 
