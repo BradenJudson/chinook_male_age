@@ -16,7 +16,13 @@
 **.html
 **.gds
 **.ld
+**.jpg
+**.png
 data/popGWAS.csv
+data/ots17*.txt
+data/*.map
+data/*.ld
+data/*.out
 data/global_gwas_data_jacksbinom.csv
 data/global_gwas_data.csv
 data/rad_pca_scores.csv
