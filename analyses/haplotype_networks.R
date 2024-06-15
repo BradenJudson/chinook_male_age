@@ -3,21 +3,15 @@ setwd("~/chinook_male_age/analyses")
 library(tidyverse); library(cowplot); library(igraph); library(vcfR)
 library(gplots)
 
+source("../scripts/phasedBase_012.R") # From McKinney et al., 2021: 10.1111/mec.15712
 
 # To-do ------------------------------------------------------------------------
 
-# Consider checking LD patterns by population.
 # Label cowplot panels.
 # for heatmap2 plots: replace the labels with a number line for genomic position with landmarks that roughly correspond to the major blocks
 # add chromosome label to LD plots
-# maybe do boxplot of LD patterns by chromosome?
 # Number/label chromosomes consistently so they are not coloured/labelled as a series.
-# filter vcf to those in haplotype groups - need to modify bash with output txt file
-# check filtering of groups wit hn = 4, 6 and 8 SNPs
-# make sure all individuals have at least one unclassified haplotype
-# tidy figures and tables
-# do statistical tests for age ~ hap
-
+# Evaluate effects of oddball individuals.
 
 # LD Plots ---------------------------------------------------------------------
 
@@ -37,7 +31,7 @@ LDplots <- lapply(chromLD, FUN = function(x)
     scale_color_gradient(low  = "gray99", high="black",
                          name = expression(R^{2})) +
     labs(x = "Position (Mbp)", y = "Position (Mbp)") +
-    theme(legend.position = c(.95, .2)))
+    theme(legend.position = c(.85, .35)))
 
 # Title each LD plot with chromosome name.
 for (i in 1:34) { LDplots[[i]] <- LDplots[[i]] + 
@@ -53,30 +47,27 @@ cowplot::plot_grid(plotlist = LDplots[c("Ots17", "Ots18", "Ots30")], ncol = 2,
                    labels = c("Ots17", "Ots18", "Ots30"), hjust = 0.5)
 ggsave("../plots/ots17_18_30LD.jpg", width = 12, height = 12)
 
-
+# Get some summary stats of linkage per chromosome. 
 chStats <- lapply(chromLD, FUN = function(x) x %>% 
-                  summarise(med = median(R2), 
-                            ymin = min(R2),
-                            ymax = max(R2),
+                  summarise(med = median(R2), ymin = min(R2), ymax = max(R2),
                             lowQ = as.numeric(quantile(R2, probs = 1/4)),
                             hiQ  = as.numeric(quantile(R2, probs = 3/4)))) %>% 
-  bind_rows() %>%
-  mutate(chrom = c(paste0("Ots", sprintf("%02d", seq(1, 34, 1)))))
-
-
+  bind_rows() %>% mutate(chrom = c(paste0("Ots", sprintf("%02d", seq(1, 34, 1)))))
 
 ggplot(data = chStats, aes(x = as.factor(chrom))) +
-  geom_boxplot(aes(
-    lower = lowQ, 
-    upper = hiQ, 
-    middle = med,
-    ymin = lowQ,    #### ADD MIN/MAX But scale y-axis limits and indicate w/arrow?
-    ymax = hiQ),
+  geom_segment(aes(y = 0, yend = 0.012), 
+               arrow = arrow(length = unit(0.1, "cm")), 
+               colour = "gray80") +
+  geom_boxplot(aes(lower = lowQ, upper = hiQ, 
+    middle = med, ymin = lowQ, ymax = hiQ),
     stat = "identity") + theme_classic() +
   theme(axis.text.x = element_text(angle = 90)) +
-  labs(y = "R2", x = NULL) 
-  
+  scale_y_continuous(limits = c(0, 0.012), 
+                     breaks = seq(0, 0.012, 0.005)) +
+  labs(y = bquote(~R^2), x = NULL) 
 
+ggsave("../plots/chromLDpatterns.tiff", dpi = 300, width = 8, height = 8)
+  
 
 # Network analysis I: Global, Ots17 --------------------------------------------
 
@@ -113,25 +104,13 @@ hist(mem17$Group, main = NULL, xlab = "Group", breaks = nrow(mem17))
 
 (topGrpSnps <- mem17 %>%
   filter(Group %in% unlist(memGrp[, 1])) %>%
-  merge(., snpmap, by = "SNP") %>% 
-  group_by(Group) %>%
-  summarise(minPos   = min(position),
-            maxPos   = max(position),
-            numSnps  = n()) %>%
-  mutate(snpDistance = maxPos - minPos,
-         chromosome  = "NC_056445.1"))
-
-
-haploSnps <- mem17[mem17$Group %in% unlist(memGrp$Group),] %>% 
-  merge(., snpmap, by = "SNP") %>% select(c(3,4)) %>% 
-  mutate(position2 = position, rid = paste0("id_", rownames(.)))
-
-write.table(haploSnps, quote = F, sep = "\t",
-            "../data/ots17_haploSnpsBCF.txt",
-            row.names = F, col.names = F)
+  merge(., snpmap, by = "SNP"))
 
 # SNPs in high LD (R2 > .3) used in haplotype analysis.
 vcf17 <- read.vcfR("../data/Ots17haplotypes.vcf")
+
+q <- rownames(extract.gt(vcf17)) %in% topGrpSnps$SNP
+
 
 # Read in phased haplotype information.
 hap <- read.delim("../data/Ots17phased_hapguess_switch.out", 
@@ -147,25 +126,24 @@ hapTable <- data.frame(
   pivot_longer(cols = c("fwd", "rev"), 
                values_to = "haplotype") %>% 
   select(c(1,3)) %>% 
-  separate_wider_delim(haplotype, delim = " ", names = c(vcf17@fix[,3])) %>% 
+  separate_wider_delim(haplotype, delim = " ", names_sep = ".") %>%
+  .[,c(TRUE, q)] %>% 
   mutate(id = make.unique(id, sep = "_")) %>% 
   column_to_rownames(var = "id")
-
-# From McKinney et al., 2021.
-source("phasedBase_012.R")
 
 ots17hap <- apply(hapTable, 2 , phasedBase_012)
 rownames(ots17hap) <- rownames(hapTable)
 dim(ots17hap) == dim(hapTable)
 
+png(width = 2500, height = 1500, units = "px", "../plots/global_heatmap2.png")
 (phased_heatmap <- heatmap.2(ots17hap, trace = "none",
                             key = FALSE, labRow = FALSE, labCol = FALSE,
                             hclustfun = function(x) hclust(x, method = "ward.D")))
-
+dev.off()
 
 plot(phased_heatmap$rowDendrogram, nodePar=list(lab.cex = .2))
-abline(h=180, col = 'red2', lty = 'dashed')
-abline(v= (ncol(vcf17@gt)/2)+0.5, col = 'red2')
+abline(h = 180, col = 'red2', lty = 'dashed')
+abline(v = (nrow(ots17hap)/2)+0.5, col = 'red2')
 phasedDendro <- as.hclust(phased_heatmap$rowDendrogram)
 dendroGroups <- cutree(phasedDendro, h = 180)
 
@@ -187,12 +165,15 @@ write.csv(hGrpDF, "../data/haplotype_groups.csv", row.names = F)
 # Haplotype associations -------------------------------------------------------
 
 hapCounts <- hGrpDF %>% 
-  group_by(pop, haplotype, age) %>% tally() %>% 
+  filter(age != 5) %>% 
+  group_by(pop, haplotype, age) %>% 
+  tally() %>% 
   ungroup() %>% 
   group_by(age) %>% 
   mutate(propHap = n/sum(n))
 
-(hapC <- ggplot(data = hT, aes(x = age, y = n, fill = haplotype)) +
+(hapC <- ggplot(data = hapCounts, 
+                aes(x = age, y = n, fill = haplotype)) +
   geom_bar(position = "dodge", stat = "identity",
            colour = "gray50") +
   theme_bw() + labs(x = "Age", y = "Samples") +
@@ -215,8 +196,6 @@ chisq.test(table(hGrpDF$haplotype, hGrpDF$pop))
 (p <- lm(data = hGrpDF, age ~ haplotype*pop)); summary(p)
 anova(p)
 
-
-# cat Ots17.ld | cut -f2,5 | tr "\t" "\n" | sort | uniq | wc -l
 
 popHap<- hGrpDF %>% 
   group_by(pop, haplotype, age) %>% tally() %>% 
@@ -287,17 +266,13 @@ hapFunc <- function(population, memLimit, dendSplit) {
   
   GrpSnps <- membership %>% 
     filter(Group %in% unlist(memGrp[,1])) %>% 
-    merge(., snpmap, by = "SNP") %>% 
-    group_by(Group) %>% 
-    summarise(minPos   = min(position),
-              maxPos   = max(position),
-              numSnps  = n()) %>% 
-    mutate(snpDistance = maxPos - minPos,
-           chromosome  = "NC_056445.1")
+    merge(., snpmap, by = "SNP")
   
   # Read in original VCF used for the haplotype/phasing analyses.
+  # Extract positional SNP names by position in the original VCF input.
   PopVcf <- read.vcfR(paste0("../data/pop_vcfs/HLD/", 
-                      population, "_HLD.vcf"), verbose = FALSE)
+                       population, "_HLD.vcf"), verbose = FALSE)
+  keepSNPs <- rownames(extract.gt(PopVcf)) %in% GrpSnps$SNP
 
   # Read in phased haplotype information.
   hap    <- read.delim(paste0("../data/pop_haplotypes/", population,
@@ -310,8 +285,9 @@ hapFunc <- function(population, memLimit, dendSplit) {
                         fwd = hap[seq(2, nrow(hap), 3), 1],
                         rev = hap[seq(3, nrow(hap), 3), 1] ) %>% 
     pivot_longer(cols = c("fwd", "rev"), values_to = "haplotype") %>% 
-    select(c(1,3)) %>% 
-    separate_wider_delim(haplotype, delim = " ", names = c(PopVcf@fix[,2])) %>% 
+    select(c(1,3))  %>% 
+    separate_wider_delim(haplotype, delim = " ", names_sep = "_") %>%
+    .[,c(TRUE, keepSNPs)] %>% 
     mutate(id = make.unique(id, sep = "_")) %>% 
     column_to_rownames(var = "id")
   
@@ -322,8 +298,7 @@ hapFunc <- function(population, memLimit, dendSplit) {
   # that comprise the heatmap to the resulting list of features for each population.
   png(width = 2500, height = 1500, units = "px", 
       filename = paste0("../plots/", population, "_heatmap2_GP.png"))
-  PHM <- heatmap.2(ots17hap, trace = "none", cexCol = 1,
-                   Colv = FALSE,
+  PHM <- heatmap.2(ots17hap, trace = "none", cexCol = 1, Colv = FALSE,
                    key = FALSE, labRow = FALSE, margins = c(8, 5),
                    hclustfun = function(x) hclust(x, method = "ward.D"))
   print(paste0("Heatmap printed to ../plots/", population, "_heatmap2_GP.png")); dev.off()
@@ -334,7 +309,7 @@ hapFunc <- function(population, memLimit, dendSplit) {
       filename = paste0("../plots/", population, "_rowDendro.png"))
   plot(PHM$rowDendrogram,  nodePar=list(lab.cex = 4/5, pch = c(NA,NA))) 
   abline(h=as.numeric(dendSplit), col = 'red2', lty = 'dashed'); 
-  abline(v=(ncol(PopVcf@gt)), col = 'red2', lty = 'dashed'); dev.off()
+  abline(v=(length(keepSNPs)/2), col = 'red2', lty = 'dashed'); dev.off()
   print(paste0("Dendrogram printed to ../plots/", population, "_rowDendro.png"))
   
   # Isolate haplotype groups per individual.  
@@ -365,8 +340,7 @@ hapFunc <- function(population, memLimit, dendSplit) {
     haplotypes  = hapTab,
     heatmapdata = ots17hap,
     hapDatFull  = hapDF,
-    haploSumm   = hapSummary,
-    q = membership
+    haploSumm   = hapSummary
   )
 
   return(outputList)
@@ -374,11 +348,50 @@ hapFunc <- function(population, memLimit, dendSplit) {
   }
 
 
+# Runs the entire haplotype "pipeline" for each population. 
+# Experimentation with membership values and clustering thresholds suggest that
+# results are very robust to variation in these parameters. 
 ChHaps <- hapFunc(population = "Chilliwack", memLimit = 4, dendSplit = 40)
 PuHaps <- hapFunc(population = "Puntledge",  memLimit = 4, dendSplit = 80)
 QuHaps <- hapFunc(population = "Qualicum",   memLimit = 4, dendSplit = 60)
 
+# Make sure haplotypes are distributed as expected.
+# Write a function to check for each population.
+popCheck <- function(x) {
+  
+  # Identify most common haplotype and isolate it's corresponding number.
+  XHap <- as.numeric(x$hapDatFull %>% 
+                     group_by(haplotype) %>% 
+                     tally() %>% arrange(desc(n)) %>% 
+                     .[1, "haplotype"])
+  
+  # Individuals without the most common haplotype.
+  fChr <- x$hapDatFull %>% 
+    mutate(sexChr = case_when(
+       haplotype == XHap ~ "X",
+       haplotype != XHap ~ "Y"
+     )) %>% select(c(1,5,7)) %>% 
+     pivot_wider(names_from = name,
+                 values_from = sexChr)
+  
+  # Number of samples with each putative haplotype combination.
+  pop <- unique(x$hapDatFull$pop)
+  SA <- paste("Number of samples =", nrow(fChr))
+  YY <- paste("Number of YY samples =", nrow(fChr[fChr$Hap1 == "Y" & fChr$Hap2 == "Y", ]))
+  XY <- paste("Number of XY samples =", nrow(fChr[c(fChr$Hap1 == "X" & fChr$Hap2 == "Y") | c(fChr$Hap1 == "Y" & fChr$Hap2 == "X"),]))
+  XX <- paste("Number of XX samples =", nrow(fChr[fChr$Hap1 == "X" & fChr$Hap2 == "X", ]))
+  
+  # Print output with proper line breaks.
+  cat(paste(pop, SA, YY, XY, YY, sep = "\n"))  
+  
+  }
 
+# Putative sex-specific haplotype distributions by population.
+popCheck(QuHaps)  
+popCheck(ChHaps)
+popCheck(PuHaps)
+
+# Build a dataframe used to plot haplotype counts and proportions by age.
 all_haps <- bind_rows(list(ChHaps$haploSumm %>% mutate(pop = "Chilliwack"),
                     PuHaps$haploSumm %>% mutate(pop = "Puntledge"),
                     QuHaps$haploSumm %>% mutate(pop = "Qualicum")))
@@ -399,25 +412,14 @@ all_haps <- bind_rows(list(ChHaps$haploSumm %>% mutate(pop = "Chilliwack"),
 cowplot::plot_grid(age_hap, age_per, ncol = 1, rel_heights = c(1.15, 1))
 ggsave("../plots/withinpop_agehaplo.tiff", dpi = 300, width = 10, height = 8)
 
-
-## Use broom or something here to do lm and/or anova/chisq by population.
-
-
+# Test if age is predicted by haplotpe. 
 hapTest <- bind_rows(list(
   ChHaps$hapDatFull %>% mutate(pop = "Chilliwack"),
   PuHaps$hapDatFull %>% mutate(pop = "Puntledge"),
   QuHaps$hapDatFull %>% mutate(pop = "Qualicum")
-))
-
-
-
-
-
-
-
-
-
-
-
-
+)) %>% nest(data = -pop) %>% 
+  mutate(lmTest = map(data, ~ lm(age ~ haplotype, data =.x)),
+         lmSumm = map(lmTest, glance)) %>% 
+  unnest(lmSumm) %>% select(c(1,2,4:5,7,14:15))
+  
 
