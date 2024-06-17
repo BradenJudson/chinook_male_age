@@ -1,6 +1,6 @@
 setwd("~/chinook_male_age/analyses")
 
-library(tidyverse); library(vcfR); library(ggplot2); library(adegenet)
+library(tidyverse); library(vcfR); library(ggplot2); library(adegenet);
 library(SeqArray); library(purrr); library(SNPRelate); library(GENESIS);
 library(GGally); library(SeqVarTools); library(GWASTools)
 
@@ -27,9 +27,6 @@ remSamples <- c("18394", "18193", "80429", "18295", "80468", # These 5 are PC2 o
 radgl <- radgl[!indNames(radgl) %in% remSamples]
 
 
-
-
-
 subsamples <- as.factor(c(radgl@ind.names))
 
 # write.table(x = info[,c("Population", "Sample")], "../data/sample_pops_n707.txt",
@@ -37,17 +34,9 @@ subsamples <- as.factor(c(radgl@ind.names))
 
 # Resources used here ----------------------------------------------------------
 
+
 # https://uw-gac.github.io/SISG_2019/pc-relate.html
 # https://bioconductor.org/packages/devel/bioc/vignettes/GENESIS/inst/doc/assoc_test.html
-
-
-# To-do ------------------------------------------------------------------------
-
-
-# Clean up plots, add Otsh style chromosome names on x-axis. 
-# Make x-axis consistent w/ wrapped plot panels - need to do position PER chromosome, not total (???).
-# Set up script to conduct pairwise GWAS analyses.
-
 
 # Kinship ----------------------------------------------------------------------
 
@@ -157,11 +146,14 @@ cowplot::plot_grid(kinshippca + theme(legend.position = "top",
 ggsave("../plots/relatedness_pcs.tiff", dpi = 300, height = 10, width = 8)
 write.csv(pcair_dat[,c(1:2)], "../data/pcair1.csv", row.names = F)
 
-write.csv(as.matrix(pcrelMat), "../data/pcrel_mat.csv", row.names = T)
+# write.csv(as.matrix(pcrelMat), "../data/pcrel_mat.csv", row.names = T)
 
 
 # GWAS I: Global ---------------------------------------------------------------
 
+# Read in GRM if starting fresh from this point.
+pcrelMat <- read.csv("../data/pcrel_mat.csv", row.names = 1) %>% 
+  `colnames<-`(., gsub("\\.", "-" , sub("^X", "", colnames(.))))
 
 # Read in and reformat individual IDs, locations and phenotypes.
 info <- read.csv("../data/chRADseq_samples.csv") %>%
@@ -232,11 +224,13 @@ age_gwas_global  <- global_gwas(phenotype = "age", distribution = "gaussian",
 png(width  = 1500, height = 750, "../plots/age_gwas_global.png")
 (age_gwas_manhattan <- qqman::manhattan(age_gwas_global, bp = "pos", 
                                         snp = "variant.id", p = "Score.pval", 
-                                        genomewideline = -log(0.05/nrow(age_gwas_global)),
+                                        genomewideline = -log10(0.05/nrow(age_gwas_global)),
+                                        suggestiveline = FALSE,
                                         chr = "Nchr", logp = TRUE)); dev.off()
 
 
 # GWAS II: Local ---------------------------------------------------------------
+
 
 # Read in GRM if starting fresh from this point.
 pcrelMat <- read.csv("../data/pcrel_mat.csv", row.names = 1) %>% 
@@ -303,6 +297,7 @@ local_gwas <- function(phenotype, distribution, datafolder) {
     # are above/below that value as outliers or not. Add those values to 
     # the original dataframe for plotting purposes later on.
     agemod$sigval  <- popFDR <- 0.05/nrow(agemod)
+    agemod$padjust <- p.adjust(agemod$Score.pval, method = "fdr")
     agemod$outlier <- case_when(agemod$Score.pval <  popFDR ~ "Outlier",
                                 agemod$Score.pval >= popFDR ~ "Non-outlier")
     
@@ -335,11 +330,11 @@ multi_manhattan <- function(gwasDF, image_name) {
   
   for (pop in c(unique(gwasDF$pop))) {
     qqman::manhattan(gwasDF[gwasDF$pop == pop,],
-                     bp = "pos", snp = "variant.id",
-                     p = "Score.pval", chr = "Nchr", 
-                     main = pop)
-  
-}}
+                     genomewideline = -log10(0.05/nrow(gwasDF[gwasDF$pop == pop,])),
+                     bp = "pos", snp = "variant.id", suggestiveline = FALSE,
+                     p = "Score.pval", chr = "Nchr",
+                     main = pop, ylim = c(0, 6))  }
+  }
 
 # Manhattan plots with jack as the phenotype of interest.
 multi_manhattan(gwasDF = jack_gwas_local_full, 

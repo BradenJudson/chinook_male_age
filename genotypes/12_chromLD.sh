@@ -7,9 +7,12 @@ conda activate ../hdgbs_env
 # Original VCF (genome wide).
 FULLVCF="./08c_filtering_paralogs/snps_maf001_singletons_sub.recode.vcf.gz"
 
-CHRS=`cat <(bcftools query -f "%CHROM\n" ./08c_filtering_paralogs/snps_maf001_singletons_sub.reco>
+CHRS=`cat <(bcftools query -f "%CHROM\n" ./08c_filtering_paralogs/snps_maf001_singletons_sub.recode.vcf.gz) | sort -u`
+
 conda activate ./plink_env
 
 for chromosome in $CHRS
 do
-        plink --vcf "$FULLVCF" --chr "$chromosome" --recode --out ./10_popLDs/"$chromosome"_LDs ->done
+        plink --vcf "$FULLVCF" --chr "$chromosome" --recode --out ./10_popLDs/"$chromosome"_LDs --aec --r2 --inter-chr --ld-window-r2 0
+done
+

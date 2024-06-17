@@ -1,17 +1,13 @@
 setwd("~/chinook_male_age/analyses")
 
 library(tidyverse); library(cowplot); library(igraph); library(vcfR)
-library(gplots)
+library(gplots); library(broom)
 
 source("../scripts/phasedBase_012.R") # From McKinney et al., 2021: 10.1111/mec.15712
 
 # To-do ------------------------------------------------------------------------
 
-# Label cowplot panels.
-# for heatmap2 plots: replace the labels with a number line for genomic position with landmarks that roughly correspond to the major blocks
-# add chromosome label to LD plots
 # Number/label chromosomes consistently so they are not coloured/labelled as a series.
-# Evaluate effects of oddball individuals.
 
 # LD Plots ---------------------------------------------------------------------
 
@@ -129,7 +125,8 @@ hapTable <- data.frame(
   separate_wider_delim(haplotype, delim = " ", names_sep = ".") %>%
   .[,c(TRUE, q)] %>% 
   mutate(id = make.unique(id, sep = "_")) %>% 
-  column_to_rownames(var = "id")
+  column_to_rownames(var = "id") %>% 
+  `colnames<-`(., c(topGrpSnps$position))
 
 ots17hap <- apply(hapTable, 2 , phasedBase_012)
 rownames(ots17hap) <- rownames(hapTable)
@@ -137,7 +134,7 @@ dim(ots17hap) == dim(hapTable)
 
 png(width = 2500, height = 1500, units = "px", "../plots/global_heatmap2.png")
 (phased_heatmap <- heatmap.2(ots17hap, trace = "none",
-                            key = FALSE, labRow = FALSE, labCol = FALSE,
+                            key = FALSE, labRow = FALSE, labCol = FALSE, 
                             hclustfun = function(x) hclust(x, method = "ward.D")))
 dev.off()
 
@@ -289,10 +286,12 @@ hapFunc <- function(population, memLimit, dendSplit) {
     separate_wider_delim(haplotype, delim = " ", names_sep = "_") %>%
     .[,c(TRUE, keepSNPs)] %>% 
     mutate(id = make.unique(id, sep = "_")) %>% 
-    column_to_rownames(var = "id")
+    column_to_rownames(var = "id") %>% 
+    `colnames<-`(., c(GrpSnps[GrpSnps$SNP %in% rownames(extract.gt(PopVcf)), "position"]))
   
   ots17hap <- apply(hapTab, 2, phasedBase_012)
   rownames(ots17hap) <- rownames(hapTab)
+
   
   # Below saves the heatmap to the plot directory but also saves the data
   # that comprise the heatmap to the resulting list of features for each population.
@@ -355,8 +354,7 @@ ChHaps <- hapFunc(population = "Chilliwack", memLimit = 4, dendSplit = 40)
 PuHaps <- hapFunc(population = "Puntledge",  memLimit = 4, dendSplit = 80)
 QuHaps <- hapFunc(population = "Qualicum",   memLimit = 4, dendSplit = 60)
 
-# Make sure haplotypes are distributed as expected.
-# Write a function to check for each population.
+# Write a function to check haplotype distributions by population.
 popCheck <- function(x) {
   
   # Identify most common haplotype and isolate it's corresponding number.
