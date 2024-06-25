@@ -1,6 +1,6 @@
 setwd("~/chinook_male_age/analyses")
 
-library(tidyverse); library(vegan)
+library(tidyverse); library(vegan); library(cowplot)
 
 source("../scripts/outliers.R")
 
@@ -143,27 +143,27 @@ pop_rda_summ <- function(rda_list) {
 }
 
 # Run all Qualicum models.
-q.age.1  <- pop_rda(population = "Qualicum", phenotype = "age", maf = 1)
+q.age.1  <- pop_rda(population = "Qualicum", phenotype = "age",  maf = 1)
 q.jack.1 <- pop_rda(population = "Qualicum", phenotype = "jack", maf = 1)
-q.age.5  <- pop_rda(population = "Qualicum", phenotype = "age", maf = 5)
+q.age.5  <- pop_rda(population = "Qualicum", phenotype = "age",  maf = 5)
 q.jack.5 <- pop_rda(population = "Qualicum", phenotype = "jack", maf = 5)
 
 # Summarize Qualicum models.
 (qualicum_models <- pop_rda_summ(rda_list = list(q.age.1, q.jack.1, q.age.5, q.jack.5)))
 
 # Run all Puntledge models.
-p.age.1  <- pop_rda(population = "Puntledge", phenotype = "age", maf = 1)
+p.age.1  <- pop_rda(population = "Puntledge", phenotype = "age",  maf = 1)
 p.jack.1 <- pop_rda(population = "Puntledge", phenotype = "jack", maf = 1)
-p.age.5  <- pop_rda(population = "Puntledge", phenotype = "age", maf = 5)
+p.age.5  <- pop_rda(population = "Puntledge", phenotype = "age",  maf = 5)
 p.jack.5 <- pop_rda(population = "Puntledge", phenotype = "jack", maf = 5)
 
 # Summarize Puntledge models.
 (puntledge_models <- pop_rda_summ(rda_list = list(p.age.1, p.jack.1, p.age.5, p.jack.5)))
 
 # Run all Chilliwack models.
-c.age.1  <- pop_rda(population = "Chilliwack", phenotype = "age", maf = 1)
+c.age.1  <- pop_rda(population = "Chilliwack", phenotype = "age",  maf = 1)
 c.jack.1 <- pop_rda(population = "Chilliwack", phenotype = "jack", maf = 1)
-c.age.5  <- pop_rda(population = "Chilliwack", phenotype = "age", maf = 5)
+c.age.5  <- pop_rda(population = "Chilliwack", phenotype = "age",  maf = 5)
 c.jack.5 <- pop_rda(population = "Chilliwack", phenotype = "jack", maf = 5)
 
 # Summarize Puntledge models.
@@ -181,47 +181,96 @@ write.csv(local_rda_summary, "../data/local_rda_summary.csv", row.names = F)
 
 # SNP Loadings -----------------------------------------------------------------
 
+# SNP identities and locations from the parent VCF (w/  maf = 1% to not miss any).
+map <- read.table("../data/global_vcf/imputed/global_maf001.map")[,c(1,2,4)] %>% 
+  `colnames<-`(., c("chr", "SNP", "pos"))
 
+# Expand on Forester's outlier function to build a dataframe of outlier SNPs
+# and their respective RDA loadings per model per population. Also use the
+# parent map file above to assign genomic positions to each locus.
 find_outliers <- function(rda_list, z) {
   
+  # z = number of standard deviations away from the mean loading.
   outlier_snps <- rda_list %>% 
-    lapply(., FUN = function(x) scores(x[["model"]], choices = 1)[[1]] %>% 
+    lapply(., FUN = \(x) scores(x[["model"]], choices = 1)[[1]] %>% 
              `names<-`(., rownames(scores(x[["model"]], choices = 1)[[1]])) %>% 
-             outliers(., 3))
+             outliers(., z) %>% as.data.frame() %>% rownames_to_column() %>% 
+             `colnames<-`(., c("SNP", "loading")) %>% 
+             mutate(SNP = str_sub(SNP, end = -3)) %>% 
+             merge(., map, by = "SNP"))
   
-  }
+  } 
 
-q.outliers <- find_outliers(rda_list = list(q.age.1, q.jack.1, q.age.5, q.jack.5), z = 3)
+# Isolate outlier loci for Qualicum.
+q.outliers <- find_outliers(rda_list = tibble::lst(q.age.1, q.jack.1, q.age.5, q.jack.5), z = 3)
 
-p.outliers <- find_outliers(rda_list = list(p.age.1, p.jack.1, p.age.5, p.jack.5), z = 3)
+# Isolate outlier loci for Puntledge.
+p.outliers <- find_outliers(rda_list = tibble::lst(p.age.1, p.jack.1, p.age.5, p.jack.5), z = 3)
 
-c.outliers <- find_outliers(rda_list = list(c.age.1, c.jack.1, c.age.5, c.jack.5), z = 3)
+# Isolate outlier loci for Chilliwack.
+c.outliers <- find_outliers(rda_list = tibble::lst(c.age.1, c.jack.1, c.age.5, c.jack.5), z = 3)
 
-
+# Tabulate SNP outliers for each model and add to summary table.
 (local_rda_summary <- local_rda_summary %>% 
-  mutate(n.outliers = c(unlist(lapply(q.outliers, length)),
-                        unlist(lapply(p.outliers, length)),
-                        unlist(lapply(c.outliers, length)))))
+  mutate(n.outliers = c(unlist(lapply(q.outliers, nrow)),
+                        unlist(lapply(p.outliers, nrow)),
+                        unlist(lapply(c.outliers, nrow)))))
 
 
-length(unique(names(q.outliers %>% unlist())))
-length(unique(names(p.outliers %>% unlist())))
-length(unique(names(c.outliers %>% unlist())))
+(outliers_full <- bind_rows(c(q.outliers, p.outliers, c.outliers),
+                            .id = "dataset") %>% group_by(chr) %>%
+                            tally())
 
+# TIDY UP:
+# improve plot aesthetics
+# add % var explained to axis labels
+# improve colours, add outlines to circles - maybe one geom for outliers and non-otls
+# add geom titles to each, with maf, population and phenotype
 
+plot_outliers <- function(model) {
+  
+  model_name <- as.character(eval(parse(text=enquo(model)))[[2]])
+  print(model_name)
+  
+  outlier_list <- paste0(substr(model_name, 0, 1), ".outliers")
+  
+  j <- get(x = outlier_list, envir = .GlobalEnv)
+  
+  m <- get(x = model_name,   envir = .GlobalEnv)
+  
+  outlier_snps <- as.vector(j[[model_name]]$SNP)
+  print(outlier_snps)
+  
+  df <- data.frame(m$model$CCA$v) %>% 
+     mutate(PC1 = model$model$CA$v[,1],
+            SNP = str_sub(rownames(.), end = -3),
+            out = case_when(
+               SNP %in% outlier_snps ~ "Y",
+              !SNP %in% outlier_snps ~ "N"
+            ))
 
+   (rda_plot <- ggplot() +
+     geom_point(data = df,
+                aes(y = PC1, x = RDA1,
+                    colour = out), size = 2, alpha = 1/2) +
+       annotate("segment", xend = min(df$RDA1), x = 0,
+                yend = 0, y = 0, size = 1, colour = "black",
+                arrow = arrow(type = "open", length = unit(0.02, "npc"))) +
+       annotate("text", x = min(df$RDA1), y = 0.002, 
+                label = tools::toTitleCase(c(m$phenotype))) +
+       theme_bw() + theme(legend.position = "none"))
 
+  return(rda_plot)
+  
+}
 
+(p <- plot_outliers(q.age.1))
+ggsave("../plots/rda_test.tiff", dpi = 300, width = 6, height = 6)
 
+cowplot::plot_grid(plotlist = list(
+  plot_outliers(q.age.1), plot_outliers(q.jack.1),
+  plot_outliers(q.age.5), plot_outliers(q.jack.5)),
+  ncol = 2, nrow = 2)
 
-
-
-
-
-
-
-
-
-
-
-
+ggsave("../plots/qualicum_rdas.tiff", dpi = 300,
+       height = 10, width = 12)
