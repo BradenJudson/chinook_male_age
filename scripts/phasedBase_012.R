@@ -1,3 +1,4 @@
+# From McKinney et al., 2021: 10.1111/mec.15712
 phasedBase_012<-function(bases){
   orgAlleles<-unique(bases)
   #create named vector to convert

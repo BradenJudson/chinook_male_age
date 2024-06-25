@@ -1,4 +1,4 @@
-setwd("~/chinook_male_age/genotyping")
+setwd("~/chinook_male_age/genotypes")
 
 library(tidyverse); library(vcfR); set.seed(121)
 

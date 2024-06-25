@@ -32,3 +32,9 @@ genotyping/HDplot/
 from_mckinney2021/
 data/pcair1.csv
 data/pcrel_mat.csv
+**.log
+**.raw
+**.nosex
+analyses/puntledge_haplotypes.csv
+**.ped
+**.map
