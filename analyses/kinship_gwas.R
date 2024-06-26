@@ -7,11 +7,11 @@ library(GGally); library(SeqVarTools); library(GWASTools)
 nc <- 12 # Number of cores to use in parallel functions.
 
 # Read in genetic data and convert to genlight object.
-# gunzip("../data/snps_maf001_singletons.vcf.gz")
-rad <- read.vcfR("../data/snps_maf001_singletons_sub.recode.vcf")
-radgl <- vcfR2genlight(rad)
+R.utils::gunzip("../data/global_vcf/snps_maf001_singletons.vcf.gz")
+rad <- read.vcfR("../data/global_vcf/snps_maf001_singletons.vcf")
+(radgl <- vcfR2genlight(rad))
 
-# Site info
+# Sample information in order.
 samples <- as.factor(c(radgl$ind.names))
 
 info <- read.csv("../data/chRADseq_sampleinfo.csv") %>% 
@@ -20,17 +20,6 @@ info <- read.csv("../data/chRADseq_sampleinfo.csv") %>%
   mutate(Population = tools::toTitleCase(tolower(Population)))
 
 radgl@pop <- as.factor(info$Population)
-
-remSamples <- c("18394", "18193", "80429", "18295", "80468", # These 5 are PC2 outliers.
-                "25300", "223831", "221434") # These 3 seem like they're in the wrong population.
-
-radgl <- radgl[!indNames(radgl) %in% remSamples]
-
-
-subsamples <- as.factor(c(radgl@ind.names))
-
-# write.table(x = info[,c("Population", "Sample")], "../data/sample_pops_n707.txt",
-#             row.names = FALSE, col.names = FALSE, quote = FALSE)
 
 # Resources used here ----------------------------------------------------------
 
@@ -41,10 +30,10 @@ subsamples <- as.factor(c(radgl@ind.names))
 # Kinship ----------------------------------------------------------------------
 
 # To use KING algorithm, convert VCF to GDS object.
-rad_gds <- snpgdsVCF2GDS(vcf.fn = "../data/snps_maf001_singletons_sub.recode.vcf",
-                         out.fn = "../data/snps_maf001_sub.gds")
+rad_gds <- snpgdsVCF2GDS(vcf.fn = "../data/global_vcf/snps_maf001_singletons.vcf",
+                         out.fn = "../data/global_vcf/snps_maf001_singletons.gds")
 
-g <- snpgdsOpen("../data/snps_maf001_sub.gds", allow.duplicate = T)
+g <- snpgdsOpen("../data/global_vcf/snps_maf001_singletons.gds", allow.duplicate = T)
 
 # Conduct KING analysis using file generated above. 
 # Must specify autosomes.only = F otherwise all SNPs are discarded.
@@ -101,9 +90,9 @@ ggsave("../plots/pc_air_lineplot.tiff", dpi = 300, width = 12, height = 8)
 
 # In preperation of using PC-Relate some file (re-)formatting is required.
 gdsfmt::showfile.gds(closeall = T)
-SeqArray::seqSNP2GDS(gds.fn = "../data/snps_maf001.gds",
-                     out.fn = "../data/snps_seqmaf001.gds")
-seqDat <- SeqVarData("../data/snps_seqmaf001.gds")
+SeqArray::seqSNP2GDS(gds.fn = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.gds",
+                     out.fn = "../data/global_vcf/imputed/snps_maf001_seq.imputed.gds")
+seqDat <- SeqVarData("../data/global_vcf/imputed/snps_maf001_seq.imputed.gds")
 PC1 <- as.matrix(pcs[,2]); rownames(PC1) <- rownames(pcs)
 iterator <- SeqVarBlockIterator(seqData = seqDat)
 
@@ -146,7 +135,7 @@ cowplot::plot_grid(kinshippca + theme(legend.position = "top",
 ggsave("../plots/relatedness_pcs.tiff", dpi = 300, height = 10, width = 8)
 write.csv(pcair_dat[,c(1:2)], "../data/pcair1.csv", row.names = F)
 
-# write.csv(as.matrix(pcrelMat), "../data/pcrel_mat.csv", row.names = T)
+write.csv(as.matrix(pcrelMat), "../data/pcrel_mat.csv", row.names = T)
 
 
 # GWAS I: Global ---------------------------------------------------------------
@@ -207,8 +196,8 @@ global_gwas <- function(phenotype, distribution, vcf, gds) {
 
 
 jack_gwas_global <- global_gwas(phenotype = "jack", distribution = "binomial",
-                                vcf = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.vcf",
-                                gds = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.gds")
+                                vcf = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.vcf",
+                                gds = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.gds")
 
 png(width  = 1500, height = 750, "../plots/jack_gwas_global.png")
 (jack_gwas_manhattan <- qqman::manhattan(jack_gwas_global, bp = "pos", 
@@ -218,8 +207,8 @@ png(width  = 1500, height = 750, "../plots/jack_gwas_global.png")
 
 
 age_gwas_global  <- global_gwas(phenotype = "age", distribution = "gaussian",
-                                vcf = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.vcf",
-                                gds = "../data/global_vcf/no_thinning/snps_maf001_singletons_sub.recode.gds")
+                                vcf = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.vcf",
+                                gds = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.gds")
 
 png(width  = 1500, height = 750, "../plots/age_gwas_global.png")
 (age_gwas_manhattan <- qqman::manhattan(age_gwas_global, bp = "pos", 
@@ -241,7 +230,7 @@ ind_info <- read.csv("../data/chRADseq_samples.csv") %>%
   select(c("fishID", "age")) %>% 
   mutate(jack = case_when(age == 2 ~ 1,
                           age >  2 ~ 0)) %>% 
-  filter(fishID %in% subsamples)
+  filter(fishID %in% samples)
 
 # Function for conducting within-population GWAS.
 local_gwas <- function(phenotype, distribution, datafolder) {
@@ -333,7 +322,7 @@ multi_manhattan <- function(gwasDF, image_name) {
                      genomewideline = -log10(0.05/nrow(gwasDF[gwasDF$pop == pop,])),
                      bp = "pos", snp = "variant.id", suggestiveline = FALSE,
                      p = "Score.pval", chr = "Nchr",
-                     main = pop, ylim = c(0, 6))  }
+                     main = pop, ylim = c(0, 6.5))  }
   }
 
 # Manhattan plots with jack as the phenotype of interest.

@@ -38,3 +38,6 @@ data/pcrel_mat.csv
 analyses/puntledge_haplotypes.csv
 **.ped
 **.map
+genotypes/stats/duplicateSNP_IDs_maf005.txt
+genotypes/stats/duplicateSNP_IDs_maf001.txt
+analyses/rad_pca_scores.csv

@@ -8,6 +8,10 @@ source("../scripts/outliers.R")
 # need to correct for population structure in RDA (Z  =  PC1)
 # Use BEAGLE to impute missing genotypes, not most common
 # use PLINK to incorporate map file to understand genomic positions of outliers
+# Manhattan plots for RDA1
+# Global RDA with either PC1 or Q values as conditioning
+# Only use imputed datasets where needed (e.g., RDA and RFs)
+# RDAs with only the outlier loci
 # -------------------------------------------------------------------------
 
 
@@ -188,7 +192,7 @@ map <- read.table("../data/global_vcf/imputed/global_maf001.map")[,c(1,2,4)] %>%
 # Expand on Forester's outlier function to build a dataframe of outlier SNPs
 # and their respective RDA loadings per model per population. Also use the
 # parent map file above to assign genomic positions to each locus.
-find_outliers <- function(rda_list, z) {
+find_outliers <- \(rda_list, z) {
   
   # z = number of standard deviations away from the mean loading.
   outlier_snps <- rda_list %>% 
@@ -221,15 +225,10 @@ c.outliers <- find_outliers(rda_list = tibble::lst(c.age.1, c.jack.1, c.age.5, c
                             .id = "dataset") %>% group_by(chr) %>%
                             tally())
 
-# TIDY UP:
-# improve plot aesthetics
-# add % var explained to axis labels
-# improve colours, add outlines to circles - maybe one geom for outliers and non-otls
-# add geom titles to each, with maf, population and phenotype
 
-plot_outliers <- function(model) {
+plot_outliers <- \(model) {
   
-  model_name <- as.character(eval(parse(text=enquo(model)))[[2]])
+  model_name <- rlang::as_label(eval(parse(text=enquo(model)))[[2]])
   print(model_name)
   
   outlier_list <- paste0(substr(model_name, 0, 1), ".outliers")
@@ -250,27 +249,127 @@ plot_outliers <- function(model) {
             ))
 
    (rda_plot <- ggplot() +
-     geom_point(data = df,
-                aes(y = PC1, x = RDA1,
-                    colour = out), size = 2, alpha = 1/2) +
+       geom_point(data = df[df$out == "N", ],
+                  aes(y = PC1, x = RDA1), 
+                  shape = 21, size = 2, fill = 'gray95', 
+                  colour = 'gray60', alpha = 4/5) +
+     geom_point(data = df[df$out == "Y", ],
+                aes(y = PC1, x = RDA1), 
+                shape = 21, size = 2, fill = '#1f78b4') +
+       # scale_fill_manual(values = c('#f1eef6', '#1f78b4')) +
        annotate("segment", xend = min(df$RDA1), x = 0,
                 yend = 0, y = 0, size = 1, colour = "black",
                 arrow = arrow(type = "open", length = unit(0.02, "npc"))) +
        annotate("text", x = min(df$RDA1), y = 0.002, 
                 label = tools::toTitleCase(c(m$phenotype))) +
-       theme_bw() + theme(legend.position = "none"))
+       theme_bw() + theme(legend.position = "none") +
+       ggtitle(paste0("maf = ", model$maf/100)))
 
   return(rda_plot)
   
 }
 
-(p <- plot_outliers(q.age.1))
-ggsave("../plots/rda_test.tiff", dpi = 300, width = 6, height = 6)
-
-cowplot::plot_grid(plotlist = list(
+(qualicum_rdas <- cowplot::plot_grid(plotlist = list(
   plot_outliers(q.age.1), plot_outliers(q.jack.1),
   plot_outliers(q.age.5), plot_outliers(q.jack.5)),
-  ncol = 2, nrow = 2)
+  ncol = 2, nrow = 2))
 
 ggsave("../plots/qualicum_rdas.tiff", dpi = 300,
        height = 10, width = 12)
+
+(puntledge_rdas <- cowplot::plot_grid(plotlist = list(
+  plot_outliers(p.age.1), plot_outliers(p.jack.1),
+  plot_outliers(p.age.5), plot_outliers(p.jack.5)),
+  ncol = 2, nrow = 2))
+
+ggsave("../plots/puntledge_rdas.tiff", dpi = 300,
+       height = 10, width = 12)
+
+(chilliwack_rdas <- cowplot::plot_grid(plotlist = list(
+  plot_outliers(c.age.1), plot_outliers(c.jack.1),
+  plot_outliers(c.age.5), plot_outliers(c.jack.5)),
+  ncol = 2, nrow = 2))
+
+ggsave("../plots/chilliwack_rdas.tiff", dpi = 300,
+       height = 10, width = 12)
+
+
+
+# RDA Manhattan plots ----------------------------------------------------------
+
+# Illustrate where RDA outliers occur throughout the genome.
+rda_manhattan <- \(model) {
+  
+  model_name <- rlang::as_label(eval(parse(text=enquo(model)))[[2]])
+  print(model_name)
+  
+  outlier_list <- paste0(substr(model_name, 0, 1), ".outliers")
+  
+  j <- get(x = outlier_list, envir = .GlobalEnv)
+  
+  m <- get(x = model_name,   envir = .GlobalEnv)
+  
+  outlier_snps <- as.vector(j[[model_name]]$SNP)
+  print(outlier_snps)
+  
+  snps <- data.frame(m$model$CCA$v) %>% 
+    mutate(SNP = str_sub(rownames(.), end = -3),
+           out = case_when(
+             SNP %in% outlier_snps ~ "Y",
+             !SNP %in% outlier_snps ~ "N"
+           ))  %>% merge(., map, by = "SNP")
+  
+  df <- data.frame(m$model$CCA$v) %>% 
+    mutate(SNP = str_sub(rownames(.), end = -3)) %>% 
+    merge(., map, by = "SNP") %>% 
+    group_by(chr) %>% 
+    summarise(chr_len = max(pos)) %>% 
+    mutate(tot = cumsum(chr_len) - chr_len,
+           chr = as.factor(chr)) %>%
+    select(-chr_len) %>% 
+    left_join(snps, ., by = c("chr" = "chr")) %>% 
+    arrange(chr, pos) %>% 
+    mutate(bpcum = pos + tot)
+  
+  axisdf <- df %>%
+    mutate(LG = paste0("Ots", 
+                sprintf("%02d",as.numeric(as.factor(chr))))) %>% 
+    group_by(LG) %>% 
+    summarize(m = min(bpcum))
+  
+  zc_manhattan <- ggplot() +
+    geom_point(data = df[df$out == "N",],
+               aes(x = bpcum, y = RDA1,
+                   colour = as.factor(chr))) +
+    scale_colour_manual(values = rep(c("gray80", "gray30"), 17)) +
+    geom_point(data = df[df$out == "Y",],
+               aes(x = bpcum, y = RDA1), colour = "red2") +
+    theme_classic() + 
+    geom_hline(yintercept = 0, alpha = 1/3) +
+    scale_x_continuous(breaks = axisdf$m,labels = axisdf$LG) +
+    labs(x = NULL) +
+    theme(legend.position = "none",
+          axis.text.x = element_text(angle = 90, vjust = 0.5))
+
+  return(zc_manhattan)
+  
+}
+
+# Qualicum RDA Manhattan:
+cowplot::plot_grid(plotlist = list(rda_manhattan(q.age.5), rda_manhattan(q.jack.5)),
+                   ncol = 1, labels = c("a", "b"))
+ggsave("../plots/qualicum_rda_manhattan.tiff", dpi = 300, width  = 12, height = 12)
+
+# Puntledge RDA Manhattan:
+cowplot::plot_grid(plotlist = list(rda_manhattan(p.age.5), rda_manhattan(p.jack.5)),
+                   ncol = 1, labels = c("a", "b"))
+ggsave("../plots/puntledge_rda_manhattan.tiff", dpi = 300, width  = 12, height = 12)
+
+# Chilliwack RDA Manhattan:
+cowplot::plot_grid(plotlist = list(rda_manhattan(c.age.5), rda_manhattan(c.jack.5)),
+                   ncol = 1, labels = c("a", "b"))
+ggsave("../plots/chilliwack_rda_manhattan.tiff", dpi = 300, width  = 12, height = 12)
+
+
+
+
