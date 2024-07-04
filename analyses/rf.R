@@ -1,0 +1,1 @@
+setwd("~/chinook_male_age/analyses")

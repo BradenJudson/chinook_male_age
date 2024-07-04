@@ -7,8 +7,8 @@ library(GGally); library(SeqVarTools)
 nc <- 12 # Number of cores to use in parallel functions.
 
 # Read in genetic data and convert to genlight object.
-R.utils::gunzip("../data/global_vcf/snps_maf005_singletons.vcf.gz")
-rad <- read.vcfR("../data/global_vcf/snps_maf001_singletons.vcf")
+# R.utils::gunzip("../data/global_vcf/snps_maf005_singletons.vcf.gz")
+rad <- read.vcfR("../data/global_vcf/snps_maf005_singletons.vcf")
 (radgl <- vcfR2genlight(rad))
 
 # Site info
@@ -30,8 +30,8 @@ write.csv(rad_pca$scores, "rad_pca_scores.csv", row.names = TRUE)
 pca_scores <- read.csv("rad_pca_scores.csv")
 
 # Isolate PC scores.
-pc_scores <- as.data.frame(pca_scores) %>% 
-  rename(Sample = X) %>% 
+pc_scores <- as.data.frame(rad_pca$scores) %>% 
+  rownames_to_column(var = "Sample") %>% 
   merge(., info, by = "Sample")
 
 # Isolate eigenvalues (% variation explained for each PC axis).

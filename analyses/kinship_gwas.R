@@ -7,8 +7,8 @@ library(GGally); library(SeqVarTools); library(GWASTools)
 nc <- 12 # Number of cores to use in parallel functions.
 
 # Read in genetic data and convert to genlight object.
-R.utils::gunzip("../data/global_vcf/snps_maf001_singletons.vcf.gz")
-rad <- read.vcfR("../data/global_vcf/snps_maf001_singletons.vcf")
+# R.utils::gunzip("../data/global_vcf/snps_maf005_singletons.vcf.gz")
+rad <- read.vcfR("../data/global_vcf/snps_maf005_singletons.vcf")
 (radgl <- vcfR2genlight(rad))
 
 # Sample information in order.
@@ -30,10 +30,10 @@ radgl@pop <- as.factor(info$Population)
 # Kinship ----------------------------------------------------------------------
 
 # To use KING algorithm, convert VCF to GDS object.
-rad_gds <- snpgdsVCF2GDS(vcf.fn = "../data/global_vcf/snps_maf001_singletons.vcf",
-                         out.fn = "../data/global_vcf/snps_maf001_singletons.gds")
+rad_gds <- snpgdsVCF2GDS(vcf.fn = "../data/global_vcf/snps_maf005_singletons.vcf",
+                         out.fn = "../data/global_vcf/snps_maf005_singletons.gds")
 
-g <- snpgdsOpen("../data/global_vcf/snps_maf001_singletons.gds", allow.duplicate = T)
+g <- snpgdsOpen("../data/global_vcf/snps_maf005_singletons.gds", allow.duplicate = T)
 
 # Conduct KING analysis using file generated above. 
 # Must specify autosomes.only = F otherwise all SNPs are discarded.
@@ -90,9 +90,9 @@ ggsave("../plots/pc_air_lineplot.tiff", dpi = 300, width = 12, height = 8)
 
 # In preperation of using PC-Relate some file (re-)formatting is required.
 gdsfmt::showfile.gds(closeall = T)
-SeqArray::seqSNP2GDS(gds.fn = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.gds",
-                     out.fn = "../data/global_vcf/imputed/snps_maf001_seq.imputed.gds")
-seqDat <- SeqVarData("../data/global_vcf/imputed/snps_maf001_seq.imputed.gds")
+SeqArray::seqSNP2GDS(gds.fn = "../data/global_vcf/snps_maf005_singletons.gds",
+                     out.fn = "../data/global_vcf/snps_maf005_seq.gds")
+seqDat <- SeqVarData("../data/global_vcf/snps_maf005_seq.gds")
 PC1 <- as.matrix(pcs[,2]); rownames(PC1) <- rownames(pcs)
 iterator <- SeqVarBlockIterator(seqData = seqDat)
 
@@ -196,8 +196,8 @@ global_gwas <- function(phenotype, distribution, vcf, gds) {
 
 
 jack_gwas_global <- global_gwas(phenotype = "jack", distribution = "binomial",
-                                vcf = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.vcf",
-                                gds = "../data/global_vcf/imputed/snps_maf001_singletons.imputed.gds")
+                                vcf = "../data/global_vcf/snps_maf005_singletons.vcf",
+                                gds = "../data/global_vcf/snps_maf005_singletons.gds")
 
 png(width  = 1500, height = 750, "../plots/jack_gwas_global.png")
 (jack_gwas_manhattan <- qqman::manhattan(jack_gwas_global, bp = "pos", 
@@ -304,11 +304,11 @@ local_gwas <- function(phenotype, distribution, datafolder) {
 
 # For jack associated SNPs.
 jack_gwas_local_full <- local_gwas(phenotype = "jack", distribution = "binomial",
-                                   datafolder = "../data/pop_vcfs/no_thinning/")
+                                   datafolder = "../data/pop_vcfs/maf005/")
 
 # For age associated SNPs.
 age_gwas_local_full  <- local_gwas(phenotype = "age",  distribution = "gaussian",
-                                   datafolder = "../data/pop_vcfs/no_thinning/")
+                                   datafolder = "../data/pop_vcfs/maf005/")
 
 
 # For writing manhattan plots using qqman's manhattan.

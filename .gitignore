@@ -18,6 +18,8 @@
 **.ld
 **.jpg
 **.png
+**.out
+data/pop_haplotypes/*.out
 data/popGWAS.csv
 data/ots17*.txt
 data/*.map
@@ -41,3 +43,7 @@ analyses/puntledge_haplotypes.csv
 genotypes/stats/duplicateSNP_IDs_maf005.txt
 genotypes/stats/duplicateSNP_IDs_maf001.txt
 analyses/rad_pca_scores.csv
+data/maximum_imputed_GLs.csv
+analyses/*.csv
+analyses/*.txt
+data/haplotype_groups.csv

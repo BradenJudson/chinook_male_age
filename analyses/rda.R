@@ -23,16 +23,8 @@ geno <- read.table("../data/global_vcf/imputed/snps_maf005_raw.raw",
                    header = T, sep = " ", row.names = 1, check.names = F) %>% 
   select(!c(1:5))
 
-# geno <- read.table("../data/pop_vcfs/raw/Chilliwack_imp005_raw.raw", 
-#                    header = T, sep = " ", row.names = 1) %>% 
-#   select(starts_with("X"))
-
-
 # Number of missing genotypes vs. non-missing genotypes. 
 sum(is.na(geno)); sum(!is.na(geno))
-
-# Imputation: replace missing genotypes with the most common allele at that position.
-#gen_imp <- apply(geno, 2, function(x) replace(x, is.na(x), as.numeric(names(which.max(table(x))))))
 
 # For keeping sample order consistent throughout.
 samples <- as.factor(rownames(geno))
@@ -369,6 +361,13 @@ ggsave("../plots/puntledge_rda_manhattan.tiff", dpi = 300, width  = 12, height =
 cowplot::plot_grid(plotlist = list(rda_manhattan(c.age.5), rda_manhattan(c.jack.5)),
                    ncol = 1, labels = c("a", "b"))
 ggsave("../plots/chilliwack_rda_manhattan.tiff", dpi = 300, width  = 12, height = 12)
+
+
+# RDAs Part II: Outliers only --------------------------------------------------
+
+# Print outlier SNP positions. 
+
+
 
 
 
