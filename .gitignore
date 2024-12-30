@@ -47,3 +47,4 @@ data/maximum_imputed_GLs.csv
 analyses/*.csv
 analyses/*.txt
 data/haplotype_groups.csv
+analyses/haplotype_pq_combined.R

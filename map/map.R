@@ -3,12 +3,13 @@ setwd("~/chinook_male_age/map")
 library(ggplot2); library(tidyverse); library(sf)
 library(bcmaps); library(ggspatial); library(sp) 
 library(ggrepel); library(cowplot); library(geodata)
-library(ggsci)
+library(ggsci); library(ConGenFunctions)
 
 ################################################################################
 # To do:
 # Change x-axis from Qualicum River to Big Qualicum River
 # Choose a more accessible colour palette 
+# remove disconnected rivers 
 ################################################################################
 
 
@@ -24,8 +25,14 @@ USA <- sf::st_as_sf(geodata::gadm(country = "USA", level = 0, path = "."))
 # Relatively low-resolution data of BC watercourses. 
 # At this scale, basically just Fraser and a few others.
 # Remove Lillooet so it doesn't bleed through inset plot later on. 
-fraser <- bcmaps::watercourses_5M() %>% 
-  filter(!name_en %in% c("Lillooet River"))
+
+fraser <- bcmaps::watercourses_5M() %>% filter(permanency == 20) 
+bigriv <- bcmaps::watercourses_5M() %>% 
+  filter(!name_en %in% c("Gold River", "Nimpkish River", "Lillooet River",
+                         "Somass River", "Not identified", "Bridge River",
+                         "Stamp River", "Muchalat River", "Taseko River")) %>% 
+  filter(name_id != "6315d17b-904f-4320-993f-b7c8e068ee4f")
+bc_rivs <- rbind(fraser, bigriv)
 
 # Downloaded high-res shapefiles of water lines via iMap BC.
 rivers <- st_transform(st_read(dsn = "BC_WATER_LINES_500M"), crs = 4326) %>% 
@@ -34,7 +41,7 @@ rivers <- st_transform(st_read(dsn = "BC_WATER_LINES_500M"), crs = 4326) %>%
   # Awkwardly create lat/lon features for some filtering.
   # Just prevents a super busy and messy figure later on.
   mutate(lon = as.numeric(gsub(",.*", "", gsub("c", "", gsub("*\\(", "", geometry )))),
-         lat = as.numeric(gsub("[^0-9.-]","", str_sub(string = geometry, -18 , -2))))
+         lat = as.numeric(gsub("[\r\n]", "",str_sub(sub(".* ", "\\2", geometry), 1, 10))))
 
 # Isolate waterways near Puntledge River site.
 punt <- rivers %>% 
@@ -63,28 +70,27 @@ lakes <- st_transform(st_read(dsn = "FWA_LAKES_POLY"), crs = 4326) %>%
         panel.border = element_rect(color = "black", fill = NA),
         panel.grid = element_blank()) +
   labs(x = NULL, y = NULL) +
-  geom_sf(data = fraser, colour = "skyblue", linewidth = 1/4) +
-  geom_sf(data =  punt, colour  = "skyblue", linewidth = 1/4) +
-  geom_sf(data =  qual, colour  = "skyblue", linewidth = 1/4) +
-  geom_sf(data =  chil, colour  = "skyblue", linewidth = 1/4) +
-  geom_sf(data = lakes, colour  = "skyblue", fill = "skyblue2") +
+  geom_sf(data = bc_rivs,colour = "skyblue", linewidth = 1/4) +
+  geom_sf(data =  punt,  colour = "skyblue", linewidth = 1/4) +
+  geom_sf(data =  qual,  colour = "skyblue", linewidth = 1/4) +
+  geom_sf(data =  chil,  colour = "skyblue", linewidth = 1/4) +
+  geom_sf(data = lakes,  colour = "skyblue", fill = "skyblue2") +
   geom_point(data = sites, aes(x = Lon, y = Lat), size = 1) +
   geom_label_repel(data = sites, aes(x = Lon, y = Lat, label = Site),
-                   size = 2, min.segment.length = 0,
+                   size = 4, min.segment.length = 0,
                    box.padding = 0, nudge_y = 0.1,
                    point.padding = 1/10, segment.size = 0.2) +
   ggspatial::annotation_scale(location = "tr",
-                              width_hint = 1/10,
+                              width_hint = 1/5,
                               pad_x = unit(0.32, "cm"),
-                              pad_y = unit(3.20, "cm")) +
+                              pad_y = unit(5.5, "cm")) +
   # Add custom N arrow because the ggspatial options are all very nautical.
-  geom_segment(aes(x = -122.4, xend = -122.4,
-                     y = 49.60, yend = 50),
+  geom_segment(aes(x = -123.5, xend = -123.5,
+                     y =51.5, yend = 52.4),
                  arrow = arrow(length = unit(1/5, "cm"))) +
-  annotate("text", label = "N", x = -122.4, y = 49.55) +
-  annotate("text", label = "Straight of Georgia", 
-             x = -123.7, y = 49.3, size = 3) +
-  coord_sf(xlim = c(-121.5, -125.4), ylim = c(49, 50)))
+  annotate("text", label = "N", x = -123.5, y = 51.45, size = 5) +
+  coord_sf(xlim = c(-121.5, -128.2), ylim = c(49, 52.4)))
+
 
 
 # Inset ------------------------------------------------------------------------
@@ -103,19 +109,19 @@ us <- map_data("world", "USA")
     theme_void() +
     theme(panel.border = element_rect(colour = "black", 
                                       fill = NA, linewidth = 1/4),
-          panel.background = element_rect(fill = alpha("skyblue", 1/4)))  +
+          panel.background = element_rect(fill = alpha("#f3fafd", 1)))  +
     annotate("rect", fill = NA, colour = "black",
-             linewidth = 1/2,
-             xmin = -125.4, xmax = -121.5,
-             ymin = 49, ymax = 50) +
+             linewidth = 1,
+             xmin = -128.5, xmax = -121.5,
+             ymin = 49, ymax = 52.4) +
     # Awkward parsing below to ensure text is centered over two lines.
     annotate(geom = "text", label = "British 
-Columbia", y = 55, x = -123.8, size = 3/2) +
+Columbia", y = 55, x = -123.8, size = 3) +
     annotate(geom = "text", label = "Pacific 
-Ocean", y = 50, x = -140, size = 3/2) +
-    geom_segment(aes(x = -135, xend = -126,
+Ocean", y = 50, x = -140, size = 3) +
+    geom_segment(aes(x = -135, xend = -128.5,
                      y = 46, yend = 48.8),
-                 arrow = arrow(length = unit(1/5, "cm"))) +
+                 arrow = arrow(length = unit(1/3, "cm"))) +
     # Important to maintain accurate proportions/orientations. 
     # Plot is Cartesian otherwise and appears distorted.
     coord_map(ylim = c(60, 45),
@@ -124,16 +130,12 @@ Ocean", y = 50, x = -140, size = 3/2) +
 
 # Add inset --------------------------------------------------------------------
 
+ConGenFunctions::insettr(b, ins,
+                         location = "tr",
+                         height = 0.3,
+                         width = 0.3)
 
-# Use cowplot to insert inset plot of NA. 
-(mapwinset <- ggdraw(plot = b) +
-  draw_plot({
-    ins
-  },
-  x = 0.77,
-  y = 0.50,
-  width = 0.2,
-  height = 0.5))
+ggsave("../plots/map_simple.tiff", width = 9, height = 9, dpi = 300)
 
 
 # Sample info ------------------------------------------------------------------
